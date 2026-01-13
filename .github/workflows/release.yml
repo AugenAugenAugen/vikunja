@@ -16,6 +16,9 @@ jobs:
       - name: Git describe
         id: ghd
         uses: proudust/gh-describe@v2
+      - name: Set repository name lowercase
+        id: repo_name
+        run: echo "repo_lower=$(echo ${{ github.repository }} | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
       - name: Login to GHCR
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
         with:
@@ -42,8 +45,8 @@ jobs:
           platforms: linux/amd64
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:main
-            ghcr.io/${{ github.repository }}:unstable
+            ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:main
+            ghcr.io/${{ steps.repo_name.outputs.repo_lower }}:unstable
           build-args: |
             RELEASE_VERSION=${{ steps.ghd.outputs.describe }}
       - name: Build and push version
