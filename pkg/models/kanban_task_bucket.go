@@ -206,7 +206,7 @@ func applyFilterModificationsToTask(s *xorm.Session, a web.Auth, task *Task, mod
 		case "labels", "label_id":
 			// Handle label assignment
 			if intVal, ok := mod.Value.(int64); ok {
-				err = updateTaskLabelsForFilter(s, a, task, intVal)
+				err = updateTaskLabelsForFilter(s, a, task, intVal, mod.Comparator)
 				if err != nil {
 					return err
 				}
@@ -214,7 +214,7 @@ func applyFilterModificationsToTask(s *xorm.Session, a web.Auth, task *Task, mod
 		case "assignees":
 			// Handle assignee assignment
 			if stringSlice, ok := mod.Value.([]string); ok && len(stringSlice) > 0 {
-				err = updateTaskAssigneesForFilter(s, a, task, stringSlice)
+				err = updateTaskAssigneesForFilter(s, a, task, stringSlice, mod.Comparator)
 				if err != nil {
 					return err
 				}
@@ -236,7 +236,13 @@ func applyFilterModificationsToTask(s *xorm.Session, a web.Auth, task *Task, mod
 }
 
 // updateTaskLabelsForFilter updates task labels when moving to a filter bucket
-func updateTaskLabelsForFilter(s *xorm.Session, a web.Auth, task *Task, labelID int64) (err error) {
+func updateTaskLabelsForFilter(s *xorm.Session, a web.Auth, task *Task, labelID int64, comparator string) (err error) {
+	// For != comparator, remove the label
+	if comparator == "!=" {
+		_, err = s.Where("task_id = ? AND label_id = ?", task.ID, labelID).Delete(&LabelTask{})
+		return err
+	}
+
 	// Check if label already exists on task
 	for _, l := range task.Labels {
 		if l.ID == labelID {
@@ -253,7 +259,7 @@ func updateTaskLabelsForFilter(s *xorm.Session, a web.Auth, task *Task, labelID 
 }
 
 // updateTaskAssigneesForFilter updates task assignees when moving to a filter bucket
-func updateTaskAssigneesForFilter(s *xorm.Session, a web.Auth, task *Task, usernames []string) (err error) {
+func updateTaskAssigneesForFilter(s *xorm.Session, a web.Auth, task *Task, usernames []string, comparator string) (err error) {
 	if len(usernames) == 0 {
 		return nil
 	}
@@ -261,17 +267,23 @@ func updateTaskAssigneesForFilter(s *xorm.Session, a web.Auth, task *Task, usern
 	// Get the first username from the filter
 	username := usernames[0]
 
+	// Find the user by username
+	u, err := user.GetUserByUsername(s, username)
+	if err != nil {
+		return err
+	}
+
+	// For != comparator, remove the assignee
+	if comparator == "!=" {
+		_, err = s.Where("task_id = ? AND user_id = ?", task.ID, u.ID).Delete(&TaskAssginee{})
+		return err
+	}
+
 	// Check if user is already assigned
 	for _, assignee := range task.Assignees {
 		if assignee.Username == username {
 			return nil // Already assigned
 		}
-	}
-
-	// Find the user by username
-	u, err := user.GetUserByUsername(s, username)
-	if err != nil {
-		return err
 	}
 
 	// Add the assignee to the task
