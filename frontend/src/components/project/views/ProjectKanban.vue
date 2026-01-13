@@ -434,7 +434,22 @@ const bucketDraggableComponentData = computed(() => ({
 }))
 const project = computed(() => projectId.value ? projectStore.projects[projectId.value] : null)
 const view = computed(() => project.value?.views.find(v => v.id === props.viewId) as IProjectView || null)
-const canWrite = computed(() => baseStore.currentProject?.maxPermission > Permissions.READ && view.value.bucketConfigurationMode === 'manual')
+const canWrite = computed(() => {
+	if (baseStore.currentProject?.maxPermission <= Permissions.READ) {
+		return false
+	}
+	
+	if (view.value?.bucketConfigurationMode === 'manual') {
+		return true
+	}
+	
+	// For filter mode: check if draggable
+	if (view.value?.bucketConfigurationMode === 'filter') {
+		return view.value.bucketConfigurationDraggable === true
+	}
+	
+	return false
+})
 const canCreateTasks = computed(() => canWrite.value && projectId.value > 0)
 const buckets = computed(() => kanbanStore.buckets)
 const loading = computed(() => kanbanStore.isLoading)
@@ -586,6 +601,13 @@ async function updateTaskPosition(e) {
 			}
 			if (updatedTaskBucket.bucket) {
 				kanbanStore.setBucketById(updatedTaskBucket.bucket, false)
+			}
+			
+			// For filter buckets, reload the board since task properties have changed
+			// and the task should now correctly appear in the target bucket
+			if (view.value?.bucketConfigurationMode === 'filter') {
+				kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)
+				return
 			}
 		}
 		kanbanStore.setTaskInBucket(newTask)

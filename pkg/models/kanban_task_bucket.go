@@ -50,6 +50,19 @@ func (b *TaskBucket) TableName() string {
 }
 
 func (b *TaskBucket) CanUpdate(s *xorm.Session, a web.Auth) (bool, error) {
+	// First, get the view to check the bucket configuration mode
+	view, err := GetProjectViewByIDAndProject(s, b.ProjectViewID, b.ProjectID)
+	if err != nil {
+		return false, err
+	}
+
+	// For filter-based buckets, check project permissions directly
+	if view.BucketConfigurationMode == BucketConfigurationModeFilter {
+		p := &Project{ID: view.ProjectID}
+		return p.CanUpdate(s, a)
+	}
+
+	// For manual buckets, use existing bucket permission check
 	bucket := Bucket{
 		ID:            b.BucketID,
 		ProjectID:     b.ProjectID,
@@ -85,6 +98,192 @@ func (b *TaskBucket) upsert(s *xorm.Session) (err error) {
 
 // updateTaskBucket is internally used to actually do the update.
 func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
+	view, err := GetProjectViewByIDAndProject(s, b.ProjectViewID, b.ProjectID)
+	if err != nil {
+		return err
+	}
+
+	// Handle filter-based bucket mode
+	if view.BucketConfigurationMode == BucketConfigurationModeFilter {
+		return updateTaskBucketForFilterMode(s, a, b, view)
+	}
+
+	// Handle manual bucket mode (existing logic)
+	return updateTaskBucketForManualMode(s, a, b, view)
+}
+
+// updateTaskBucketForFilterMode handles moving tasks between filter-based buckets
+func updateTaskBucketForFilterMode(s *xorm.Session, a web.Auth, b *TaskBucket, view *ProjectView) (err error) {
+	// Check if filter bucket is draggable
+	if !view.BucketConfigurationDraggable {
+		return ErrFilterBucketNotDraggable{
+			ProjectViewID: view.ID,
+			BucketID:      b.BucketID,
+		}
+	}
+
+	// Validate target bucket index
+	if b.BucketID < 0 || int(b.BucketID) >= len(view.BucketConfiguration) {
+		return ErrBucketDoesNotExist{BucketID: b.BucketID}
+	}
+
+	// Get the task
+	task := &Task{ID: b.TaskID}
+	err = task.ReadOne(s, a)
+	if err != nil {
+		return err
+	}
+
+	// Get the target bucket filter
+	targetBucketConfig := view.BucketConfiguration[b.BucketID]
+	if targetBucketConfig.Filter == nil || targetBucketConfig.Filter.Filter == "" {
+		// Empty filter bucket - no task modifications needed, task will appear in this bucket
+		// if it doesn't match any other bucket's filter
+		b.Task = task
+		return nil
+	}
+
+	// Parse the target filter
+	filters, err := getTaskFiltersFromFilterString(targetBucketConfig.Filter.Filter, targetBucketConfig.Filter.FilterTimezone)
+	if err != nil {
+		return err
+	}
+
+	// Get the modifications needed to match the target filter
+	_, modifications := CanModifyFilterBucket(filters)
+
+	// Apply modifications to the task
+	err = applyFilterModificationsToTask(s, a, task, modifications)
+	if err != nil {
+		return err
+	}
+
+	b.Task = task
+	return nil
+}
+
+// applyFilterModificationsToTask applies filter modifications to a task
+func applyFilterModificationsToTask(s *xorm.Session, a web.Auth, task *Task, modifications []FilterBucketModification) (err error) {
+	var updateCols []string
+
+	for _, mod := range modifications {
+		switch mod.Field {
+		case "done":
+			if boolVal, ok := mod.Value.(bool); ok {
+				task.Done = boolVal
+				if task.Done {
+					task.DoneAt = time.Now()
+				} else {
+					task.DoneAt = time.Time{}
+				}
+				updateCols = append(updateCols, "done", "done_at")
+			}
+		case "priority":
+			if intVal, ok := mod.Value.(int64); ok {
+				task.Priority = intVal
+				updateCols = append(updateCols, "priority")
+			}
+		case "percent_done":
+			if floatVal, ok := mod.Value.(float64); ok {
+				task.PercentDone = floatVal
+				updateCols = append(updateCols, "percent_done")
+			}
+		case "due_date":
+			if timeVal, ok := mod.Value.(time.Time); ok {
+				task.DueDate = timeVal
+				updateCols = append(updateCols, "due_date")
+			}
+		case "start_date":
+			if timeVal, ok := mod.Value.(time.Time); ok {
+				task.StartDate = timeVal
+				updateCols = append(updateCols, "start_date")
+			}
+		case "end_date":
+			if timeVal, ok := mod.Value.(time.Time); ok {
+				task.EndDate = timeVal
+				updateCols = append(updateCols, "end_date")
+			}
+		case "labels", "label_id":
+			// Handle label assignment
+			if intVal, ok := mod.Value.(int64); ok {
+				err = updateTaskLabelsForFilter(s, a, task, intVal)
+				if err != nil {
+					return err
+				}
+			}
+		case "assignees":
+			// Handle assignee assignment
+			if stringSlice, ok := mod.Value.([]string); ok && len(stringSlice) > 0 {
+				err = updateTaskAssigneesForFilter(s, a, task, stringSlice)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	// Update the task with the modified columns
+	if len(updateCols) > 0 {
+		_, err = s.Where("id = ?", task.ID).
+			Cols(updateCols...).
+			Update(task)
+		if err != nil {
+			return
+		}
+	}
+
+	return nil
+}
+
+// updateTaskLabelsForFilter updates task labels when moving to a filter bucket
+func updateTaskLabelsForFilter(s *xorm.Session, a web.Auth, task *Task, labelID int64) (err error) {
+	// Check if label already exists on task
+	for _, l := range task.Labels {
+		if l.ID == labelID {
+			return nil // Label already assigned
+		}
+	}
+
+	// Add the label to the task
+	lt := &LabelTask{
+		TaskID:  task.ID,
+		LabelID: labelID,
+	}
+	return lt.Create(s, a)
+}
+
+// updateTaskAssigneesForFilter updates task assignees when moving to a filter bucket
+func updateTaskAssigneesForFilter(s *xorm.Session, a web.Auth, task *Task, usernames []string) (err error) {
+	if len(usernames) == 0 {
+		return nil
+	}
+
+	// Get the first username from the filter
+	username := usernames[0]
+
+	// Check if user is already assigned
+	for _, assignee := range task.Assignees {
+		if assignee.Username == username {
+			return nil // Already assigned
+		}
+	}
+
+	// Find the user by username
+	u, err := user.GetUserByUsername(s, username)
+	if err != nil {
+		return err
+	}
+
+	// Add the assignee to the task
+	ta := &TaskAssginee{
+		TaskID: task.ID,
+		UserID: u.ID,
+	}
+	return ta.Create(s, a)
+}
+
+// updateTaskBucketForManualMode handles moving tasks between manual buckets (existing logic)
+func updateTaskBucketForManualMode(s *xorm.Session, a web.Auth, b *TaskBucket, view *ProjectView) (err error) {
 	oldTaskBucket := &TaskBucket{}
 	_, err = s.
 		Where("task_id = ? AND project_view_id = ?", b.TaskID, b.ProjectViewID).
@@ -96,11 +295,6 @@ func updateTaskBucket(s *xorm.Session, a web.Auth, b *TaskBucket) (err error) {
 	if oldTaskBucket.BucketID == b.BucketID {
 		// no need to do anything
 		return
-	}
-
-	view, err := GetProjectViewByIDAndProject(s, b.ProjectViewID, b.ProjectID)
-	if err != nil {
-		return err
 	}
 
 	bucket, err := getBucketByID(s, b.BucketID)

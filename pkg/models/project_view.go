@@ -152,6 +152,9 @@ type ProjectView struct {
 	// If tasks are moved to the done bucket, they are marked as done. If they are marked as done individually, they are moved into the done bucket.
 	DoneBucketID int64 `xorm:"bigint INDEX null" json:"done_bucket_id"`
 
+	// Indicates whether tasks can be dragged between filter-based buckets. This is true when all bucket filters contain only modifiable properties.
+	BucketConfigurationDraggable bool `xorm:"-" json:"bucket_configuration_draggable"`
+
 	// A timestamp when this view was updated. You cannot change this value.
 	Updated time.Time `xorm:"updated not null" json:"updated"`
 	// A timestamp when this reaction was created. You cannot change this value.
@@ -165,12 +168,29 @@ func (pv *ProjectView) TableName() string {
 	return "project_views"
 }
 
+// SetBucketConfigurationDraggable sets the BucketConfigurationDraggable field
+// based on whether the bucket filters allow drag & drop
+func (pv *ProjectView) SetBucketConfigurationDraggable() {
+	if pv.BucketConfigurationMode != BucketConfigurationModeFilter {
+		pv.BucketConfigurationDraggable = false
+		return
+	}
+	pv.BucketConfigurationDraggable = CheckBucketConfigurationDraggable(pv.BucketConfiguration)
+}
+
 func getViewsForProject(s *xorm.Session, projectID int64) (views []*ProjectView, err error) {
 	views = []*ProjectView{}
 	err = s.
 		Where("project_id = ?", projectID).
 		OrderBy("position asc").
 		Find(&views)
+	if err != nil {
+		return
+	}
+
+	for _, v := range views {
+		v.SetBucketConfigurationDraggable()
+	}
 	return
 }
 
@@ -461,6 +481,7 @@ func GetProjectViewByIDAndProject(s *xorm.Session, viewID, projectID int64) (vie
 		}
 	}
 
+	view.SetBucketConfigurationDraggable()
 	return
 }
 
@@ -480,6 +501,7 @@ func GetProjectViewByID(s *xorm.Session, id int64) (view *ProjectView, err error
 		}
 	}
 
+	view.SetBucketConfigurationDraggable()
 	return
 }
 

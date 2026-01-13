@@ -37,6 +37,7 @@ export interface IProjectView extends IAbstract {
 	bucketConfiguration: IProjectViewBucketConfiguration[]
 	defaultBucketId: number
 	doneBucketId: number
+	bucketConfigurationDraggable: boolean
 
 	created: Date
 	updated: Date

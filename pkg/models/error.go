@@ -1841,6 +1841,34 @@ func (err ErrTaskAlreadyExistsInBucket) HTTPError() web.HTTPError {
 	}
 }
 
+// ErrFilterBucketNotDraggable represents an error where a filter bucket does not support drag & drop
+type ErrFilterBucketNotDraggable struct {
+	ProjectViewID int64
+	BucketID      int64
+}
+
+// IsErrFilterBucketNotDraggable checks if an error is ErrFilterBucketNotDraggable.
+func IsErrFilterBucketNotDraggable(err error) bool {
+	_, ok := err.(ErrFilterBucketNotDraggable)
+	return ok
+}
+
+func (err ErrFilterBucketNotDraggable) Error() string {
+	return fmt.Sprintf("Filter bucket does not support drag & drop [ProjectViewID: %d, BucketID: %d]", err.ProjectViewID, err.BucketID)
+}
+
+// ErrCodeFilterBucketNotDraggable holds the unique world-error code of this error
+const ErrCodeFilterBucketNotDraggable = 10007
+
+// HTTPError holds the http error description
+func (err ErrFilterBucketNotDraggable) HTTPError() web.HTTPError {
+	return web.HTTPError{
+		HTTPCode: http.StatusBadRequest,
+		Code:     ErrCodeFilterBucketNotDraggable,
+		Message:  "This filter bucket does not support drag & drop because it contains non-modifiable filters.",
+	}
+}
+
 // =============
 // Saved Filters
 // =============
