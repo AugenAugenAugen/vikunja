@@ -206,6 +206,8 @@ func GetTasksInBucketsForView(s *xorm.Session, view *ProjectView, projects []*Pr
 	tasks := []*Task{}
 
 	opts.projectViewID = view.ID
+	
+	// Default sorting for manual buckets: by position
 	opts.sortby = []*sortParam{
 		{
 			projectViewID: view.ID,
@@ -242,6 +244,26 @@ func GetTasksInBucketsForView(s *xorm.Session, view *ProjectView, projects []*Pr
 
 				if view.BucketConfiguration[id].Filter.Search != "" {
 					opts.search = view.BucketConfiguration[id].Filter.Search
+				}
+				
+				// Apply bucket-specific sorting if configured
+				if len(view.BucketConfiguration[id].SortBy) > 0 {
+					opts.sortby = []*sortParam{}
+					for i, sortBy := range view.BucketConfiguration[id].SortBy {
+						orderBy := orderAscending
+						if i < len(view.BucketConfiguration[id].OrderBy) {
+							switch view.BucketConfiguration[id].OrderBy[i] {
+							case "asc":
+								orderBy = orderAscending
+							case "desc":
+								orderBy = orderDescending
+							}
+						}
+						opts.sortby = append(opts.sortby, &sortParam{
+							sortBy:  sortBy,
+							orderBy: orderBy,
+						})
+					}
 				}
 			}
 

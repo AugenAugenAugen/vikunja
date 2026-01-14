@@ -22,6 +22,8 @@ export type ProjectViewBucketConfigurationMode = typeof PROJECT_VIEW_BUCKET_CONF
 export interface IProjectViewBucketConfiguration {
 	title: string
 	filter: IFilters
+	sort_by: string[]
+	order_by: string[]
 }
 
 export interface IProjectView extends IAbstract {
