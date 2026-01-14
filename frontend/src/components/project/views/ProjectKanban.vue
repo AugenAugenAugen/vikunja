@@ -379,6 +379,7 @@ import ProjectViewService from '@/services/projectViews'
 import ProjectViewModel from '@/models/projectView'
 import TaskBucketService from '@/services/taskBucket'
 import TaskBucketModel from '@/models/taskBucket'
+import BucketService from '@/services/bucket'
 
 const props = defineProps<{
 	isLoadingProject: boolean,
@@ -922,30 +923,21 @@ async function toggleDefaultBucket(bucket: IBucket) {
 async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy: string) {
 	if (!view.value) return
 	
-	const projectViewService = new ProjectViewService()
+	const bucketService = new BucketService()
 	
-	// Update bucket configuration with new sort settings
-	const updatedBucketConfig = {
-		...view.value.bucketConfiguration,
-		[bucketId]: {
-			...view.value.bucketConfiguration[bucketId],
-			sort_by: sortBy === 'position' ? [] : [sortBy],
-			order_by: sortBy === 'position' ? [] : [orderBy],
-		},
-	}
+	// Find the bucket to update
+	const bucket = kanbanStore.getBucketById(bucketId)
+	if (!bucket) return
 	
-	const updatedView = await projectViewService.update(new ProjectViewModel({
-		...view.value,
-		bucketConfiguration: updatedBucketConfig,
+	// Update bucket with new sort settings
+	const updatedBucket = await bucketService.update(new BucketModel({
+		...bucket,
+		sort_by: sortBy === 'position' ? [] : [sortBy],
+		order_by: sortBy === 'position' ? [] : [orderBy],
 	}))
-
-	const views = project.value.views.map(v => v.id === view.value?.id ? updatedView : v)
-	const updatedProject = {
-		...project.value,
-		views,
-	}
-
-	projectStore.setProject(updatedProject)
+	
+	// Update the bucket in the store
+	kanbanStore.setBucketById(updatedBucket)
 	
 	// Reload buckets to apply new sorting
 	await kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)

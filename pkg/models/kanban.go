@@ -49,6 +49,10 @@ type Bucket struct {
 	// The position this bucket has when querying all buckets. See the tasks.position property on how to use this.
 	Position float64 `xorm:"double null" json:"position"`
 
+	// Sort settings for tasks in this bucket
+	SortBy  []string `xorm:"JSON null" json:"sort_by"`
+	OrderBy []string `xorm:"JSON null" json:"order_by"`
+
 	// A timestamp when this bucket was created. You cannot change this value.
 	Created time.Time `xorm:"created not null" json:"created"`
 	// A timestamp when this bucket was last updated. You cannot change this value.
@@ -253,6 +257,26 @@ func GetTasksInBucketsForView(s *xorm.Session, view *ProjectView, projects []*Pr
 						orderBy := orderAscending
 						if i < len(view.BucketConfiguration[id].OrderBy) {
 							switch view.BucketConfiguration[id].OrderBy[i] {
+							case "asc":
+								orderBy = orderAscending
+							case "desc":
+								orderBy = orderDescending
+							}
+						}
+						opts.sortby = append(opts.sortby, &sortParam{
+							sortBy:  sortBy,
+							orderBy: orderBy,
+						})
+					}
+				}
+			} else if view.BucketConfigurationMode == BucketConfigurationModeManual {
+				// Apply bucket-specific sorting for manual buckets
+				if len(bucket.SortBy) > 0 {
+					opts.sortby = []*sortParam{}
+					for i, sortBy := range bucket.SortBy {
+						orderBy := orderAscending
+						if i < len(bucket.OrderBy) {
+							switch bucket.OrderBy[i] {
 							case "asc":
 								orderBy = orderAscending
 							case "desc":

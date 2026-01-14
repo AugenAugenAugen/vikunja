@@ -37,16 +37,29 @@ func (tasks20260114191907) TableName() string {
 	return "tasks"
 }
 
+type buckets20260114191907 struct {
+	SortBy  string `xorm:"TEXT null"`
+	OrderBy string `xorm:"TEXT null"`
+}
+
+func (buckets20260114191907) TableName() string {
+	return "buckets"
+}
+
 func init() {
 	migrations = append(migrations, &xormigrate.Migration{
 		ID:          "20260114191907",
-		Description: "Add doing_bucket_id to project_views and percent_done to tasks",
+		Description: "Add doing_bucket_id to project_views, percent_done to tasks, and sort fields to buckets",
 		Migrate: func(tx *xorm.Engine) error {
 			err := tx.Sync2(projectViews20260114191907{})
 			if err != nil {
 				return err
 			}
-			return tx.Sync2(tasks20260114191907{})
+			err = tx.Sync2(tasks20260114191907{})
+			if err != nil {
+				return err
+			}
+			return tx.Sync2(buckets20260114191907{})
 		},
 		Rollback: func(tx *xorm.Engine) error {
 			return nil
