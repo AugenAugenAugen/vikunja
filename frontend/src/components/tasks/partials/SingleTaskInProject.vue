@@ -135,8 +135,8 @@
 			</div>
 
 			<ProgressBar
-				v-if="task.percentDone > 0"
-				:value="task.percentDone * 100"
+				v-if="hasSubtasks && task.percentDone > 0"
+				:value="task.percentDone"
 				is-small
 			/>
 

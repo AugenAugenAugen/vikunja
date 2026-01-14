@@ -151,6 +151,8 @@ type ProjectView struct {
 	BucketConfiguration []*ProjectViewBucketConfiguration `xorm:"json" json:"bucket_configuration"`
 	// The ID of the bucket where new tasks without a bucket are added to. By default, this is the leftmost bucket in a view.
 	DefaultBucketID int64 `xorm:"bigint INDEX null" json:"default_bucket_id"`
+	// If tasks are moved to the doing bucket, their progress is set to at least 10%. This helps indicate that work has started.
+	DoingBucketID int64 `xorm:"bigint INDEX null" json:"doing_bucket_id"`
 	// If tasks are moved to the done bucket, they are marked as done. If they are marked as done individually, they are moved into the done bucket.
 	DoneBucketID int64 `xorm:"bigint INDEX null" json:"done_bucket_id"`
 

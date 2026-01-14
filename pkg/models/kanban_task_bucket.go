@@ -386,6 +386,12 @@ func updateTaskBucketForManualMode(s *xorm.Session, a web.Auth, b *TaskBucket, v
 			return
 		}
 
+		// Update progress for parent tasks when a subtask's done status changes
+		err = updateParentTaskProgress(s, task.ID)
+		if err != nil {
+			return
+		}
+
 		// Since the done state of the task was changed, we need to move the task into all done buckets everywhere
 		if task.Done {
 			viewsWithDoneBucket := []*ProjectView{}
@@ -406,6 +412,30 @@ func updateTaskBucketForManualMode(s *xorm.Session, a web.Auth, b *TaskBucket, v
 				if err != nil {
 					return
 				}
+			}
+		}
+	}
+
+	// Handle doing bucket - set progress to at least 10% when moved into doing bucket
+	// Only update if the task doesn't have subtasks (subtask progress takes precedence)
+	if view.DoingBucketID != 0 && b.BucketID == view.DoingBucketID && !task.Done {
+		// Check if task has subtasks
+		hasSubtasks, err := s.Exist(&TaskRelation{
+			TaskID:       task.ID,
+			RelationKind: RelationKindSubtask,
+		})
+		if err != nil {
+			return err
+		}
+
+		// Only set minimum progress if task has no subtasks
+		if !hasSubtasks && task.PercentDone < 10 {
+			task.PercentDone = 10
+			_, err = s.Where("id = ?", task.ID).
+				Cols("percent_done").
+				Update(task)
+			if err != nil {
+				return err
 			}
 		}
 	}

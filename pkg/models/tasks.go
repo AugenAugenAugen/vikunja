@@ -1061,6 +1061,76 @@ func setTaskInBucketInViews(s *xorm.Session, t *Task, a web.Auth, setBucket bool
 	return positions, taskBuckets, nil
 }
 
+// updateParentTaskProgress calculates and updates progress for all parent tasks
+func updateParentTaskProgress(s *xorm.Session, taskID int64) error {
+	// Get all parent tasks (tasks that have this task as a subtask)
+	parentRelations := []*TaskRelation{}
+	err := s.Where("other_task_id = ? AND relation_kind = ?", taskID, RelationKindSubtask).
+		Find(&parentRelations)
+	if err != nil {
+		return err
+	}
+
+	// Update progress for each parent task
+	for _, rel := range parentRelations {
+		err = calculateAndUpdateTaskProgress(s, rel.TaskID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// calculateAndUpdateTaskProgress calculates progress for a task based on its subtasks
+func calculateAndUpdateTaskProgress(s *xorm.Session, taskID int64) error {
+	// Get all subtasks
+	subtaskRelations := []*TaskRelation{}
+	err := s.Where("task_id = ? AND relation_kind = ?", taskID, RelationKindSubtask).
+		Find(&subtaskRelations)
+	if err != nil {
+		return err
+	}
+
+	// If no subtasks, don't update progress (leave as manually set value)
+	if len(subtaskRelations) == 0 {
+		return nil
+	}
+
+	// Get all subtasks to check their done status
+	subtaskIDs := make([]int64, len(subtaskRelations))
+	for i, rel := range subtaskRelations {
+		subtaskIDs[i] = rel.OtherTaskID
+	}
+
+	subtasks := []*Task{}
+	err = s.In("id", subtaskIDs).Find(&subtasks)
+	if err != nil {
+		return err
+	}
+
+	// Calculate progress
+	totalSubtasks := len(subtasks)
+	doneSubtasks := 0
+	for _, subtask := range subtasks {
+		if subtask.Done {
+			doneSubtasks++
+		}
+	}
+
+	percentDone := 0.0
+	if totalSubtasks > 0 {
+		percentDone = (float64(doneSubtasks) / float64(totalSubtasks)) * 100.0
+	}
+
+	// Update the parent task's progress
+	_, err = s.Where("id = ?", taskID).
+		Cols("percent_done").
+		Update(&Task{PercentDone: percentDone})
+
+	return err
+}
+
 // Update updates a project task
 // @Summary Update a task
 // @Description Updates a task. This includes marking it as done. Assignees you pass will be updated, see their individual endpoints for more details on how this is done. To update labels, see the description of the endpoint.
@@ -1254,6 +1324,12 @@ func (t *Task) updateSingleTask(s *xorm.Session, a web.Auth, fields []string) (e
 	// When a task changed its done status, make sure it is in the correct bucket
 	if t.ProjectID == ot.ProjectID && !t.isRepeating() && t.Done != ot.Done {
 		err = t.moveTaskToDoneBuckets(s, a, views)
+		if err != nil {
+			return
+		}
+
+		// Update progress for parent tasks when a subtask's done status changes
+		err = updateParentTaskProgress(s, t.ID)
 		if err != nil {
 			return
 		}
