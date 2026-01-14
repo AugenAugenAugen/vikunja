@@ -120,14 +120,14 @@
 											{{ $t('project.kanban.doneBucket') }}
 										</DropdownItem>
 										<DropdownItem
-											v-if="view?.bucketConfigurationMode === 'filter'"
+											v-if="view?.bucketConfigurationMode === 'filter' || view?.bucketConfigurationMode === 'manual'"
 											icon="sort"
 											@click.stop="showBucketSortSettings = bucket.id"
 										>
 											{{ $t('project.kanban.sortBy') }}
 										</DropdownItem>
 										<div
-											v-if="showBucketSortSettings === bucket.id && view?.bucketConfigurationMode === 'filter'"
+											v-if="showBucketSortSettings === bucket.id && (view?.bucketConfigurationMode === 'filter' || view?.bucketConfigurationMode === 'manual')"
 											class="px-4 py-2"
 											@click.stop
 										>
@@ -137,8 +137,11 @@
 												<div class="control">
 													<div class="select is-fullwidth is-small">
 														<select
-															:value="view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position'"
-															@change="(e) => updateBucketSort(bucket.id, (e.target as HTMLSelectElement).value, view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc')"
+															:value="view?.bucketConfigurationMode === 'manual' ? (bucket.sort_by?.[0] || 'position') : (view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position')"
+															@change="(e) => {
+																const orderBy = view?.bucketConfigurationMode === 'manual' ? (bucket.order_by?.[0] || 'asc') : (view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc');
+																updateBucketSort(bucket.id, (e.target as HTMLSelectElement).value, orderBy);
+															}"
 														>
 															<option value="position">Position (Default)</option>
 															<option
@@ -157,8 +160,11 @@
 												<div class="control">
 													<div class="select is-fullwidth is-small">
 														<select
-															:value="view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc'"
-															@change="(e) => updateBucketSort(bucket.id, view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position', (e.target as HTMLSelectElement).value)"
+															:value="view?.bucketConfigurationMode === 'manual' ? (bucket.order_by?.[0] || 'asc') : (view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc')"
+															@change="(e) => {
+																const sortBy = view?.bucketConfigurationMode === 'manual' ? (bucket.sort_by?.[0] || 'position') : (view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position');
+																updateBucketSort(bucket.id, sortBy, (e.target as HTMLSelectElement).value);
+															}"
 														>
 															<option value="asc">{{ $t('project.kanban.ascending') }}</option>
 															<option value="desc">{{ $t('project.kanban.descending') }}</option>
