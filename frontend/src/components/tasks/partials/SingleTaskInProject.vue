@@ -188,6 +188,25 @@
 			</template>
 		</template>
 	</div>
+	
+	<Modal
+		:enabled="showUpdateChildTasksModal"
+		@close="cancelChildTasksUpdate"
+		@submit="confirmChildTasksUpdate"
+	>
+		<template #header>
+			<span>{{ $t('task.updateChildTasks') }}</span>
+		</template>
+
+		<template #text>
+			<p v-if="pendingUpdateType === 'done'">
+				{{ task.done ? $t('task.updateChildTasksDoneText') : $t('task.updateChildTasksUndoneText') }}
+			</p>
+			<p v-else>
+				{{ $t('task.updateChildTasksPropertyText') }}
+			</p>
+		</template>
+	</Modal>
 </template>
 
 <script setup lang="ts">
@@ -209,6 +228,7 @@ import BaseButton from '@/components/base/BaseButton.vue'
 import FancyCheckbox from '@/components/input/FancyCheckbox.vue'
 import ColorBubble from '@/components/misc/ColorBubble.vue'
 import Popup from '@/components/misc/Popup.vue'
+import Modal from '@/components/misc/Modal.vue'
 
 import TaskService from '@/services/task'
 
@@ -308,9 +328,23 @@ onMounted(updateDueDate)
 
 watch(() => task.value.dueDate, updateDueDate)
 
+const hasSubtasks = computed(() => {
+	return task.value.relatedTasks?.subtask && task.value.relatedTasks.subtask.length > 0
+})
+
+const showUpdateChildTasksModal = ref(false)
+const pendingUpdateType = ref<'done' | 'property'>('done')
+const pendingUpdate = ref<{checked?: boolean, wasReverted?: boolean} | null>(null)
+
 let oldTask
 
-async function markAsDone(checked: boolean, wasReverted: boolean = false) {
+async function markAsDone(checked: boolean, wasReverted: boolean = false, skipChildPrompt: boolean = false) {	// Ask about child tasks if this task has subtasks and we're not skipping the prompt
+	if (!skipChildPrompt && !wasReverted && hasSubtasks.value) {
+		pendingUpdateType.value = 'done'
+		pendingUpdate.value = {checked, wasReverted}
+		showUpdateChildTasksModal.value = true
+		return
+	}
 	const updateFunc = async () => {
 		oldTask = {...task.value}
 		const newTask = await taskStore.update(task.value)
@@ -350,7 +384,40 @@ function undoDone(checked: boolean) {
 		task.value = {...oldTask}
 	}
 	task.value.done = !task.value.done
-	markAsDone(!checked, true)
+	markAsDone(!checked, true, true)
+}
+
+async function confirmChildTasksUpdate() {
+	showUpdateChildTasksModal.value = false
+	
+	if (pendingUpdateType.value === 'done' && pendingUpdate.value) {
+		// Update parent task
+		await markAsDone(pendingUpdate.value.checked, pendingUpdate.value.wasReverted, true)
+		
+		// Update all child tasks
+		if (task.value.relatedTasks?.subtask) {
+			for (const subtask of task.value.relatedTasks.subtask) {
+				const childTask = getTaskById(subtask.id)
+				if (childTask && childTask.done !== task.value.done) {
+					childTask.done = task.value.done
+					await taskStore.update(childTask)
+				}
+			}
+		}
+	}
+	
+	pendingUpdate.value = null
+}
+
+function cancelChildTasksUpdate() {
+	showUpdateChildTasksModal.value = false
+	
+	if (pendingUpdateType.value === 'done' && pendingUpdate.value) {
+		// Just update parent, skip child prompt
+		markAsDone(pendingUpdate.value.checked, pendingUpdate.value.wasReverted, true)
+	}
+	
+	pendingUpdate.value = null
 }
 
 async function toggleFavorite() {
