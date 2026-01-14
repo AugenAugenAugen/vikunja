@@ -59,7 +59,18 @@ func init() {
 			if err != nil {
 				return err
 			}
-			return tx.Sync2(buckets20260114191907{})
+			err = tx.Sync2(buckets20260114191907{})
+			if err != nil {
+				return err
+			}
+			
+			// Set default empty arrays for existing buckets
+			_, err = tx.Exec("UPDATE buckets SET sort_by = '[]' WHERE sort_by IS NULL")
+			if err != nil {
+				return err
+			}
+			_, err = tx.Exec("UPDATE buckets SET order_by = '[]' WHERE order_by IS NULL")
+			return err
 		},
 		Rollback: func(tx *xorm.Engine) error {
 			return nil
