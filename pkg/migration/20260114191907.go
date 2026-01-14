@@ -38,8 +38,8 @@ func (tasks20260114191907) TableName() string {
 }
 
 type buckets20260114191907 struct {
-	SortBy  string `xorm:"TEXT null"`
-	OrderBy string `xorm:"TEXT null"`
+	SortBy  []string `xorm:"JSON null"`
+	OrderBy []string `xorm:"JSON null"`
 }
 
 func (buckets20260114191907) TableName() string {

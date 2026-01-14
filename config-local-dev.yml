@@ -1,0 +1,12 @@
+service:
+  publicurl: http://localhost:3456
+  
+database:
+  type: postgres
+  host: localhost:5433
+  database: vikunja
+  user: vikunja
+  password: vikunja123
+  
+log:
+  level: DEBUG

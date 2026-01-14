@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  postgres-vikunja:
+    image: postgres:15-alpine
+    container_name: vikunja-local-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vikunja
+      POSTGRES_PASSWORD: vikunja123
+      POSTGRES_DB: vikunja
+    ports:
+      - "5433:5432"
+    volumes:
+      - vikunja_local_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vikunja"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  vikunja-local:
+    image: vikunja/vikunja:latest
+    container_name: vikunja-local
+    restart: unless-stopped
+    ports:
+      - "8081:3456"
+    environment:
+      VIKUNJA_DATABASE_TYPE: postgres
+      VIKUNJA_DATABASE_HOST: postgres-vikunja
+      VIKUNJA_DATABASE_DATABASE: vikunja
+      VIKUNJA_DATABASE_USER: vikunja
+      VIKUNJA_DATABASE_PASSWORD: vikunja123
+      VIKUNJA_SERVICE_PUBLICURL: http://localhost:8081
+    volumes:
+      - vikunja_local_files:/app/vikunja/files
+    depends_on:
+      postgres-vikunja:
+        condition: service_healthy
+
+volumes:
+  vikunja_local_data:
+  vikunja_local_files:

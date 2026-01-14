@@ -171,6 +171,15 @@ func GetTasksInBucketsForView(s *xorm.Session, view *ProjectView, projects []*Pr
 		if err != nil {
 			return
 		}
+		// Initialize empty arrays for nil sort fields
+		for _, b := range buckets {
+			if b.SortBy == nil {
+				b.SortBy = []string{}
+			}
+			if b.OrderBy == nil {
+				b.OrderBy = []string{}
+			}
+		}
 	}
 
 	if view.BucketConfigurationMode == BucketConfigurationModeFilter {
