@@ -120,6 +120,62 @@
 											{{ $t('project.kanban.doneBucket') }}
 										</DropdownItem>
 										<DropdownItem
+											v-if="view?.bucketConfigurationMode === 'filter'"
+											icon="sort"
+											@click.stop="showBucketSortSettings = bucket.id"
+										>
+											{{ $t('project.kanban.sortBy') }}
+										</DropdownItem>
+										<div
+											v-if="showBucketSortSettings === bucket.id && view?.bucketConfigurationMode === 'filter'"
+											class="px-4 py-2"
+											@click.stop
+										>
+											<p class="mb-2 has-text-weight-bold">{{ $t('project.kanban.sortBy') }}</p>
+											<div class="field">
+												<label class="label is-small">{{ $t('project.kanban.sortField') }}</label>
+												<div class="control">
+													<div class="select is-fullwidth is-small">
+														<select
+															:value="view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position'"
+															@change="(e) => updateBucketSort(bucket.id, (e.target as HTMLSelectElement).value, view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc')"
+														>
+															<option value="position">Position (Default)</option>
+															<option
+																v-for="opt in sortOptions"
+																:key="opt.value"
+																:value="opt.value"
+															>
+																{{ opt.label }}
+															</option>
+														</select>
+													</div>
+												</div>
+											</div>
+											<div class="field">
+												<label class="label is-small">{{ $t('project.kanban.sortOrder') }}</label>
+												<div class="control">
+													<div class="select is-fullwidth is-small">
+														<select
+															:value="view?.bucketConfiguration?.[bucket.id]?.order_by?.[0] || 'asc'"
+															@change="(e) => updateBucketSort(bucket.id, view?.bucketConfiguration?.[bucket.id]?.sort_by?.[0] || 'position', (e.target as HTMLSelectElement).value)"
+														>
+															<option value="asc">{{ $t('project.kanban.ascending') }}</option>
+															<option value="desc">{{ $t('project.kanban.descending') }}</option>
+														</select>
+													</div>
+												</div>
+											</div>
+											<XButton
+												variant="secondary"
+												:shadow="false"
+												class="is-small mt-2"
+												@click="showBucketSortSettings = null"
+											>
+												{{ $t('misc.close') }}
+											</XButton>
+										</div>
+										<DropdownItem
 											v-tooltip="$t('project.kanban.defaultBucketHint')"
 											:icon-class="{'has-text-primary': bucket.id === view?.defaultBucketId}"
 											icon="th"
@@ -379,11 +435,22 @@ const newTaskError = ref<{ [id: IBucket['id']]: boolean }>({})
 const newTaskInputFocused = ref(false)
 
 const showSetLimitInput = ref(false)
+const showBucketSortSettings = ref<IBucket['id'] | null>(null)
 const collapsedBuckets = ref<CollapsedBuckets>({})
 
 // We're using this to show the loading animation only at the task when updating it
 const taskUpdating = ref<{ [id: ITask['id']]: boolean }>({})
 const oneTaskUpdating = ref(false)
+
+// Available sort fields for bucket sorting
+const sortOptions = [
+	{ value: 'due_date', label: 'Due Date' },
+	{ value: 'priority', label: 'Priority' },
+	{ value: 'done', label: 'Done' },
+	{ value: 'created', label: 'Created' },
+	{ value: 'updated', label: 'Updated' },
+	{ value: 'title', label: 'Title' },
+]
 
 // URL-synchronized filter parameters
 const filter = useRouteQuery('filter')
@@ -850,6 +917,41 @@ async function toggleDefaultBucket(bucket: IBucket) {
 	projectStore.setProject(updatedProject)
 
 	success({message: t('project.kanban.defaultBucketSavedSuccess')})
+}
+
+async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy: string) {
+	if (!view.value) return
+	
+	const projectViewService = new ProjectViewService()
+	
+	// Update bucket configuration with new sort settings
+	const updatedBucketConfig = {
+		...view.value.bucketConfiguration,
+		[bucketId]: {
+			...view.value.bucketConfiguration[bucketId],
+			sort_by: sortBy === 'position' ? [] : [sortBy],
+			order_by: sortBy === 'position' ? [] : [orderBy],
+		},
+	}
+	
+	const updatedView = await projectViewService.update(new ProjectViewModel({
+		...view.value,
+		bucketConfiguration: updatedBucketConfig,
+	}))
+
+	const views = project.value.views.map(v => v.id === view.value?.id ? updatedView : v)
+	const updatedProject = {
+		...project.value,
+		views,
+	}
+
+	projectStore.setProject(updatedProject)
+	
+	// Reload buckets to apply new sorting
+	await kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)
+	
+	success({message: t('project.kanban.sortSavedSuccess')})
+	showBucketSortSettings.value = null
 }
 
 async function toggleDoneBucket(bucket: IBucket) {
