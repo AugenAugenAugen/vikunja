@@ -393,7 +393,7 @@ const params = ref<TaskFilterParams>({
 	sort_by: [],
 	order_by: [],
 	filter: '',
-	filter_include_nulls: false,
+	filter_include_nulls: true,
 	s: '',
 })
 
