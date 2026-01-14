@@ -933,7 +933,7 @@ async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy
 	
 	// Find the bucket to update
 	const bucket = kanbanStore.getBucketById(bucketId)
-	if (!bucket) return
+	if (!bucket || bucket.id === 0) return // Can't update default bucket
 	
 	// Update bucket with new sort settings
 	const updatedBucket = await bucketService.update(new BucketModel({
