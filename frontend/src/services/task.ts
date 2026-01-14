@@ -60,8 +60,9 @@ export default class TaskService extends AbstractService<ITask> {
 		model.startDate = parseDate(model.startDate)
 		model.endDate = parseDate(model.endDate)
 		model.doneAt = parseDate(model.doneAt)
-		model.created = parseDate(model.created)
-		model.updated = parseDate(model.updated)
+		// created and updated should always be valid, but use current time as fallback
+		model.created = parseDate(model.created) || new Date().toISOString()
+		model.updated = parseDate(model.updated) || new Date().toISOString()
 
 		model.reminderDates = null
 		// normalize reminders if present
