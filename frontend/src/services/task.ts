@@ -10,11 +10,14 @@ import {objectToSnakeCase} from '@/helpers/case'
 import {AuthenticatedHTTPFactory} from '@/helpers/fetcher'
 
 const parseDate = date => {
-	if (date) {
-		return new Date(date).toISOString()
+	try {
+		if (!date) return null
+		const d = new Date(date)
+		if (Number.isNaN(d.getTime())) return null
+		return d.toISOString()
+	} catch (_) {
+		return null
 	}
-
-	return null
 }
 
 export default class TaskService extends AbstractService<ITask> {
@@ -52,31 +55,37 @@ export default class TaskService extends AbstractService<ITask> {
 		// Ensure that projectId is an int
 		model.projectId = Number(model.projectId)
 
-		// Convert dates into an iso string
+		// Convert dates into an iso string (safely)
 		model.dueDate = parseDate(model.dueDate)
 		model.startDate = parseDate(model.startDate)
 		model.endDate = parseDate(model.endDate)
 		model.doneAt = parseDate(model.doneAt)
-		model.created = new Date(model.created).toISOString()
-		model.updated = new Date(model.updated).toISOString()
+		model.created = parseDate(model.created)
+		model.updated = parseDate(model.updated)
 
 		model.reminderDates = null
-		// remove all nulls, these would create empty reminders
-		for (const index in model.reminders) {
-			if (model.reminders[index] === null) {
-				model.reminders.splice(index, 1)
+		// normalize reminders if present
+		if (Array.isArray(model.reminders)) {
+			// remove all nulls, these would create empty reminders
+			for (let i = model.reminders.length - 1; i >= 0; i--) {
+				if (model.reminders[i] === null) {
+					model.reminders.splice(i, 1)
+				}
 			}
-		}
-		// Make normal timestamps from js dates
-		if (model.reminders.length > 0) {
-			model.reminders.forEach(r => {
-				r.reminder = new Date(r.reminder).toISOString()
-			})
+
+			// Make normal timestamps from js dates
+			if (model.reminders.length > 0) {
+				model.reminders.forEach(r => {
+					r.reminder = parseDate(r.reminder)
+				})
+			}
+		} else {
+			model.reminders = []
 		}
 
 		// Make the repeating amount to seconds
 		let repeatAfterSeconds = 0
-		if (model.repeatAfter !== null && (model.repeatAfter.amount !== null || model.repeatAfter.amount !== 0)) {
+		if (model.repeatAfter && model.repeatAfter.amount != null && model.repeatAfter.amount !== 0) {
 			switch (model.repeatAfter.type) {
 				case 'hours':
 					repeatAfterSeconds = model.repeatAfter.amount * SECONDS_A_HOUR

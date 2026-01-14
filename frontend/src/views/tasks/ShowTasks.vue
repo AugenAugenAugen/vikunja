@@ -47,6 +47,11 @@
 					</XButton>
 				</template>
 			</DatepickerWithRange>
+			<label class="sort-select mbe-2">
+				<select v-model="selectedSort" @change="onSortChange">
+					<option v-for="opt in sortOptions" :key="opt.key" :value="opt.key">{{ opt.label }}</option>
+				</select>
+			</label>
 			<FancyCheckbox
 				:model-value="showNulls"
 				class="mie-2"
@@ -184,6 +189,25 @@ const userAuthenticated = computed(() => authStore.authenticated)
 const loading = computed(() => taskStore.isLoading || taskCollectionService.value.loading)
 const filterIdUsedOnOverview = computed(() => authStore.settings?.frontendSettings?.filterIdUsedOnOverview)
 
+// Sorting options for the overview
+const sortOptions = [
+	{ key: 'due_asc', label: t('task.show.sort.due_asc'), sort_by: ['due_date', 'id'], order_by: ['asc', 'desc'] },
+	{ key: 'due_desc', label: t('task.show.sort.due_desc'), sort_by: ['due_date', 'id'], order_by: ['desc', 'desc'] },
+	{ key: 'created_desc', label: t('task.show.sort.created_desc'), sort_by: ['created_at', 'id'], order_by: ['desc', 'desc'] },
+]
+
+const selectedSort = ref((route.query.sort as string) ?? 'due_asc')
+
+function onSortChange() {
+	router.push({
+		name: route.name as string,
+		query: {
+			...route.query,
+			sort: selectedSort.value,
+		},
+	})
+}
+
 interface dateStrings {
 	dateFrom: string,
 	dateTo: string,
@@ -234,9 +258,11 @@ async function loadPendingTasks(from: Date|string, to: Date|string, filterId: nu
 		return
 	}
 
+	const activeSort = sortOptions.find(o => o.key === selectedSort.value) ?? sortOptions[0]
+
 	const params: TaskFilterParams = {
-		sort_by: ['due_date', 'id'],
-		order_by: ['asc', 'desc'],
+		sort_by: activeSort.sort_by,
+		order_by: activeSort.order_by,
 		filter: 'done = false',
 		filter_include_nulls: props.showNulls,
 		s: '',
@@ -329,5 +355,9 @@ watchEffect(() => setTitle(pageTitle.value))
 		justify-content: center;
 		gap: 0.5rem;
 	}
+}
+
+.sort-select {
+    display: inline-block;
 }
 </style>

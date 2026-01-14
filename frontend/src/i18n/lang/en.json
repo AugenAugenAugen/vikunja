@@ -824,7 +824,12 @@
       "select": "Select a date range",
       "noTasks": "Nothing to do — Have a nice day!",
       "filterByLabel": "Filtering by label {label}",
-      "clearLabelFilter": "Clear label filter"
+      "clearLabelFilter": "Clear label filter",
+      "sort": {
+        "due_asc": "Due date (asc)",
+        "due_desc": "Due date (desc)",
+        "created_desc": "Created (newest)"
+      }
     },
     "detail": {
       "chooseDueDate": "Click here to set a due date",
