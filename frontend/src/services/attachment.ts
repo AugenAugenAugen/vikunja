@@ -22,9 +22,20 @@ export default class AttachmentService extends AbstractService<IAttachment> {
 	}
 
 	processModel(model: IAttachment) {
+		let created: string
+		try {
+			if (!model.created) {
+				created = new Date().toISOString()
+			} else {
+				const d = new Date(model.created)
+				created = Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+			}
+		} catch (_) {
+			created = new Date().toISOString()
+		}
 		return {
 			...model,
-			created: new Date(model.created).toISOString(),
+			created,
 		}
 	}
 

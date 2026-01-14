@@ -15,8 +15,18 @@ export default class LabelService extends AbstractService<ILabel> {
 	}
 
 	processModel(label) {
-		label.created = new Date(label.created).toISOString()
-		label.updated = new Date(label.updated).toISOString()
+		// Safe date parsing
+		const parseDate = (date) => {
+			try {
+				if (!date) return new Date().toISOString()
+				const d = new Date(date)
+				return Number.isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString()
+			} catch (_) {
+				return new Date().toISOString()
+			}
+		}
+		label.created = parseDate(label.created)
+		label.updated = parseDate(label.updated)
 		label.hexColor = colorFromHex(label.hexColor)
 		return label
 	}
