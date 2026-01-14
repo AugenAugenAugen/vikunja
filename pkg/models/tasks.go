@@ -256,7 +256,9 @@ func getFilterCond(f *taskFilter, includeNulls bool) (cond builder.Cond, err err
 		// Nothing to do
 	}
 
-	if includeNulls {
+	// Only include nulls for inequality comparisons (!=, not in)
+	// For equality comparisons (=, in), we want exact matches only
+	if includeNulls && (f.comparator == taskFilterComparatorNotEquals || f.comparator == taskFilterComparatorNotIn) {
 		cond = builder.Or(cond, &builder.IsNull{field})
 		if f.isNumeric {
 			cond = builder.Or(cond, &builder.IsNull{field}, &builder.Eq{field: 0})
