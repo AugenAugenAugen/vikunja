@@ -938,6 +938,8 @@ async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy
 	// Update bucket with new sort settings
 	const updatedBucket = await bucketService.update(new BucketModel({
 		...bucket,
+		projectId: projectId.value,
+		projectViewId: props.viewId,
 		sort_by: sortBy === 'position' ? [] : [sortBy],
 		order_by: sortBy === 'position' ? [] : [orderBy],
 	}))
