@@ -928,13 +928,45 @@ async function toggleDefaultBucket(bucket: IBucket) {
 
 async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy: string) {
 	if (!view.value) return
-	
+	// If the view uses filter-based bucket configuration, update the ProjectView
+	if (view.value.bucketConfigurationMode === 'filter') {
+		const projectViewService = new ProjectViewService()
+		const updatedViewData = klona(view.value)
+		if (!Array.isArray(updatedViewData.bucketConfiguration)) {
+			updatedViewData.bucketConfiguration = []
+		}
+
+		updatedViewData.bucketConfiguration[bucketId] = {
+			...(updatedViewData.bucketConfiguration[bucketId] || {}),
+			sort_by: sortBy === 'position' ? [] : [sortBy],
+			order_by: sortBy === 'position' ? [] : [orderBy],
+		}
+
+		const updatedView = await projectViewService.update(new ProjectViewModel(updatedViewData))
+
+		const views = project.value.views.map(v => v.id === view.value?.id ? updatedView : v)
+		const updatedProject = {
+			...project.value,
+			views,
+		}
+
+		projectStore.setProject(updatedProject)
+
+		// Reload buckets to apply new sorting
+		await kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)
+
+		success({message: t('project.kanban.sortSavedSuccess')})
+		showBucketSortSettings.value = null
+		return
+	}
+
+	// Manual mode: update the bucket itself
 	const bucketService = new BucketService()
-	
+
 	// Find the bucket to update
 	const bucket = kanbanStore.getBucketById(bucketId)
 	if (!bucket || bucket.id === 0) return // Can't update default bucket
-	
+
 	// Update bucket with new sort settings
 	const updatedBucket = await bucketService.update(new BucketModel({
 		...bucket,
@@ -943,13 +975,13 @@ async function updateBucketSort(bucketId: IBucket['id'], sortBy: string, orderBy
 		sort_by: sortBy === 'position' ? [] : [sortBy],
 		order_by: sortBy === 'position' ? [] : [orderBy],
 	}))
-	
+
 	// Update the bucket in the store
 	kanbanStore.setBucketById(updatedBucket)
-	
+
 	// Reload buckets to apply new sorting
 	await kanbanStore.loadBucketsForProject(projectId.value, props.viewId, params.value)
-	
+
 	success({message: t('project.kanban.sortSavedSuccess')})
 	showBucketSortSettings.value = null
 }
