@@ -37,20 +37,17 @@ const SORT_BY_DEFAULT: SortBy = {
 // When tasks would be sorted first by id and then by whatever else was specified, the id sort takes
 // precedence over everything else, making any other sort columns pretty useless.
 function formatSortOrder(sortBy, params) {
-	let hasIdFilter = false
 	const sortKeys = Object.keys(sortBy)
-	for (const s of sortKeys) {
-		if (s === 'id') {
-			sortKeys.splice(s, 1)
-			hasIdFilter = true
-			break
-		}
-	}
+	const hasIdFilter = sortKeys.includes('id')
+
+	// Ensure 'id' is always last if present
+ 	const ordered = sortKeys.filter(k => k !== 'id')
 	if (hasIdFilter) {
-		sortKeys.push('id')
+		ordered.push('id')
 	}
-	params.sort_by = sortKeys
-	params.order_by = sortKeys.map(s => sortBy[s])
+
+	params.sort_by = ordered
+	params.order_by = ordered.map(s => sortBy[s])
 
 	return params
 }
