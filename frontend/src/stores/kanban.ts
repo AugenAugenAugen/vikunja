@@ -266,6 +266,67 @@ export const useKanbanStore = defineStore('kanban', () => {
 				per_page: TASKS_PER_BUCKET,
 			})
 
+			// Apply client-side sorting per-bucket if the backend didn't order tasks
+			const currentProject = baseStore.currentProject
+			const view = currentProject?.views?.find(v => v.id === viewId)
+
+			function mapSortKey(key: string) {
+				switch (key) {
+					case 'due_date': return 'dueDate'
+					case 'start_date': return 'startDate'
+					case 'end_date': return 'endDate'
+					case 'percent_done': return 'percentDone'
+					case 'created': return 'created'
+					case 'updated': return 'updated'
+					case 'title': return 'title'
+					case 'done': return 'done'
+					case 'position': return 'position'
+					case 'priority': return 'priority'
+					case 'id': return 'id'
+					default: return key
+				}
+			}
+
+			function getValue(task, field) {
+				const v = task[field]
+				if (v === null || typeof v === 'undefined') return null
+				if (v instanceof Date) return v.getTime()
+				return v
+			}
+
+			for (const b of newBuckets) {
+				let sortField = b.sort_by?.[0]
+				let order = b.order_by?.[0] || 'asc'
+				// If view uses filter mode, prefer view.bucketConfiguration
+				if (view && view.bucketConfigurationMode === 'filter') {
+					const cfg = view.bucketConfiguration?.[b.id]
+					if (cfg && Array.isArray(cfg.sort_by) && cfg.sort_by.length > 0) {
+						sortField = cfg.sort_by[0]
+						order = cfg.order_by?.[0] || order
+					}
+				}
+
+				if (!sortField || sortField === 'position') {
+					continue
+				}
+
+				const field = mapSortKey(sortField)
+				b.tasks.sort((a, c) => {
+					const va = getValue(a, field)
+					const vb = getValue(c, field)
+
+					if (va === vb) return 0
+					if (va === null) return 1
+					if (vb === null) return -1
+
+					if (typeof va === 'string' && typeof vb === 'string') {
+						return order === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va)
+					}
+
+					return order === 'asc' ? (va < vb ? -1 : 1) : (va < vb ? 1 : -1)
+				})
+			}
+
 			setBuckets(newBuckets)
 			setProjectId(projectId)
 			return newBuckets
